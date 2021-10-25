@@ -29,7 +29,7 @@ public class Person {
 	private Long id;
 	
 	@Column(nullable = false)
-	private String firtName;
+	private String firstName;
 	
 	@Column(nullable = false)
 	private String lastName;

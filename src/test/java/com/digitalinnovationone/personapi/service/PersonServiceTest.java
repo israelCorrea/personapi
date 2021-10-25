@@ -1,0 +1,159 @@
+package com.digitalinnovationone.personapi.service;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.digitalinnovationone.personapi.dto.request.PersonDTO;
+import com.digitalinnovationone.personapi.dto.response.MessageResponseDTO;
+import com.digitalinnovationone.personapi.entity.Person;
+import com.digitalinnovationone.personapi.exception.PersonNotFoundException;
+import com.digitalinnovationone.personapi.mapper.PersonMapper;
+import com.digitalinnovationone.personapi.repository.PersonRepository;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+
+import static com.digitalinnovationone.personapi.utils.PersonUtils.createFakeDTO;
+import static com.digitalinnovationone.personapi.utils.PersonUtils.createFakeEntity;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+public class PersonServiceTest {
+
+	@Mock
+	private PersonRepository personRepository;
+	
+	@InjectMocks
+	private PersonService personService;
+	
+	@Mock
+    private PersonMapper personMapper;
+	
+	@Test
+	public void testGivenPersonDTOThenReturnSavedMessage() {
+		PersonDTO personDTO = createFakeDTO();
+		Person expectedSavedPerson = createFakeEntity();
+		
+		when(personMapper.toModel(personDTO)).thenReturn(expectedSavedPerson);
+		when(personRepository.save(Mockito.any(Person.class))).thenReturn(expectedSavedPerson);
+		
+		MessageResponseDTO expectedSuccessMessage = createExpectedMessageResponse(expectedSavedPerson.getId());
+		MessageResponseDTO successMessage = personService.createPerson(personDTO);
+		
+		assertEquals(expectedSuccessMessage, successMessage);
+	}
+
+	@Test
+    void testGivenValidPersonIdThenReturnThisPerson() throws PersonNotFoundException {
+        PersonDTO expectedPersonDTO = createFakeDTO();
+        Person expectedSavedPerson = createFakeEntity();
+        expectedPersonDTO.setId(expectedSavedPerson.getId());
+
+        when(personRepository.findById(expectedSavedPerson.getId())).thenReturn(Optional.of(expectedSavedPerson));
+        when(personMapper.toDTO(expectedSavedPerson)).thenReturn(expectedPersonDTO);
+
+        PersonDTO personDTO = personService.findById(expectedSavedPerson.getId());
+
+        assertEquals(expectedPersonDTO, personDTO);
+
+        assertEquals(expectedSavedPerson.getId(), personDTO.getId());
+        assertEquals(expectedSavedPerson.getFirstName(), personDTO.getFirstName());
+    }
+
+    @Test
+    void testGivenInvalidPersonIdThenThrowException() {
+        var invalidPersonId = 1L;
+        when(personRepository.findById(invalidPersonId))
+                .thenReturn(Optional.ofNullable(Mockito.any(Person.class)));
+
+        assertThrows(PersonNotFoundException.class, () -> personService.findById(invalidPersonId));
+    }
+
+    @Test
+    void testGivenNoDataThenReturnAllPeopleRegistered() {
+        List<Person> expectedRegisteredPeople = Collections.singletonList(createFakeEntity());
+        PersonDTO personDTO = createFakeDTO();
+
+        when(personRepository.findAll()).thenReturn(expectedRegisteredPeople);
+        when(personMapper.toDTO(any(Person.class))).thenReturn(personDTO);
+
+        List<PersonDTO> expectedPeopleDTOList = personService.listAll();
+
+        assertFalse(expectedPeopleDTOList.isEmpty());
+        assertEquals(expectedPeopleDTOList.get(0).getId(), personDTO.getId());
+    }
+
+    @Test
+    void testGivenValidPersonIdAndUpdateInfoThenReturnSuccesOnUpdate() throws PersonNotFoundException {
+        var updatedPersonId = 2L;
+
+        PersonDTO updatePersonDTORequest = createFakeDTO();
+        updatePersonDTORequest.setId(updatedPersonId);
+        updatePersonDTORequest.setLastName("Last name updated");
+
+        Person expectedPersonToUpdate = createFakeEntity();
+        expectedPersonToUpdate.setId(updatedPersonId);
+
+        Person expectedPersonUpdated = createFakeEntity();
+        expectedPersonUpdated.setId(updatedPersonId);
+        expectedPersonToUpdate.setLastName(updatePersonDTORequest.getLastName());
+
+        when(personRepository.findById(updatedPersonId)).thenReturn(Optional.of(expectedPersonUpdated));
+        when(personMapper.toModel(updatePersonDTORequest)).thenReturn(expectedPersonUpdated);
+        when(personRepository.save(any(Person.class))).thenReturn(expectedPersonUpdated);
+
+        MessageResponseDTO successMessage = personService.updatePerson(updatedPersonId, updatePersonDTORequest);
+
+        assertEquals("Updated Person with ID: 2", successMessage.getMessage());
+    }
+
+    @Test
+    void testGivenInvalidPersonIdAndUpdateInfoThenThrowExceptionOnUpdate() throws PersonNotFoundException {
+        var invalidPersonId = 1L;
+
+        PersonDTO updatePersonDTORequest = createFakeDTO();
+        updatePersonDTORequest.setId(invalidPersonId);
+        updatePersonDTORequest.setLastName("Peleias updated");
+
+        when(personRepository.findById(invalidPersonId))
+                .thenReturn(Optional.ofNullable(any(Person.class)));
+
+        assertThrows(PersonNotFoundException.class, () -> personService.updatePerson(invalidPersonId, updatePersonDTORequest));
+    }
+
+    @Test
+    void testGivenValidPersonIdThenReturnSuccesOnDelete() throws PersonNotFoundException {
+        var deletedPersonId = 1L;
+        Person expectedPersonToDelete = createFakeEntity();
+
+        when(personRepository.findById(deletedPersonId)).thenReturn(Optional.of(expectedPersonToDelete));
+        personService.deleteById(deletedPersonId);
+
+        verify(personRepository, times(1)).deleteById(deletedPersonId);
+    }
+
+    @Test
+    void testGivenInvalidPersonIdThenReturnSuccesOnDelete() throws PersonNotFoundException {
+        var invalidPersonId = 1L;
+        
+        when(personRepository.findById(invalidPersonId))
+                .thenReturn(Optional.ofNullable(any(Person.class)));
+
+        assertThrows(PersonNotFoundException.class, () -> personService.deleteById(invalidPersonId));
+    }
+	
+	private MessageResponseDTO createExpectedMessageResponse(Long id) {
+		return MessageResponseDTO.builder().message("Created Person with ID: " + id).build();
+	}
+}
